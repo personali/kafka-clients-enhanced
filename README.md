@@ -52,4 +52,3 @@ producer.send("key1", avroObjectInstance);
 
 * **Or Sher**
 
-
