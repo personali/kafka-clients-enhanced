@@ -51,6 +51,10 @@
                                 <pattern>io.confluent</pattern>
                                 <shadedPattern>com.personali.shaded.io.confluent</shadedPattern>
                             </relocation>
+                            <relocation>
+                                <pattern>com.fasterxml.jackson</pattern>
+                                <shadedPattern>com.personali.com.fasterxml.jackson</shadedPattern>
+                            </relocation>
                         </relocations>
                     </configuration>
                 </execution>
