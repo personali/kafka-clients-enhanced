@@ -53,7 +53,7 @@
                             </relocation>
                             <relocation>
                                 <pattern>com.fasterxml.jackson</pattern>
-                                <shadedPattern>com.personali.com.fasterxml.jackson</shadedPattern>
+                                <shadedPattern>com.personali.shaded.com.fasterxml.jackson</shadedPattern>
                             </relocation>
                         </relocations>
                     </configuration>
