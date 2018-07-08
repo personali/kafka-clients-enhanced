@@ -37,20 +37,11 @@
                     </goals>
                     <configuration>
                         <artifactSet>
-                            <excludes>
-                                <exclude>org.slf4j:*</exclude>
-                                <exclude>log4j:*</exclude>
-                            </excludes>
+                            <includes>
+                                <include>com.fasterxml.jackson.core:*</include>
+                            </includes>
                         </artifactSet>
                         <relocations>
-                            <relocation>
-                                <pattern>org.apache</pattern>
-                                <shadedPattern>com.personali.shaded.org.apache</shadedPattern>
-                            </relocation>
-                            <relocation>
-                                <pattern>io.confluent</pattern>
-                                <shadedPattern>com.personali.shaded.io.confluent</shadedPattern>
-                            </relocation>
                             <relocation>
                                 <pattern>com.fasterxml.jackson</pattern>
                                 <shadedPattern>com.personali.shaded.com.fasterxml.jackson</shadedPattern>
