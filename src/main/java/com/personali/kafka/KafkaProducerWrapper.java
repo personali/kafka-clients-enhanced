@@ -4,15 +4,14 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.slf4j.LoggerFactory;
 
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.Properties;
+import java.sql.Timestamp;
+import java.util.*;
 import java.util.concurrent.*;
 
 /**
@@ -45,7 +44,7 @@ public class KafkaProducerWrapper<K,V> {
     public KafkaProducerWrapper(String bootstrapServers, String schemaRegistryUrl,
                                 String topic, Serializer keySerializer, Serializer valueSerializer,
                                 Deserializer keyDeserializer, Deserializer valueDeserializer,
-                                Boolean recreateLocalStore) throws KafkaProducerWrapperException {
+                                Boolean recreateLocalStore) throws KafkaProducerWrapperException, KafkaUnavailableException {
         this.topic = topic;
 
         //Creating a default best practice, exactly once producer configuration
@@ -58,6 +57,7 @@ public class KafkaProducerWrapper<K,V> {
         props.put("value.serializer", valueSerializer.getClass());
         props.put("enable.idempotence", "true");
         props.put("schema.registry.url", schemaRegistryUrl);
+        props.put("max.block.ms", 10000);
 
         //Configure wrapper serdes for local store usage
         this.keyDeserializer = keyDeserializer;
@@ -70,7 +70,14 @@ public class KafkaProducerWrapper<K,V> {
         this.valueDeserializer.configure(props,false);
 
         //Initialize Apache Kafka Producer Client
-        producer = new KafkaProducer<K, V>(props);
+        try {
+            producer = new KafkaProducer<K, V>(props);
+            Future<RecordMetadata> metadata = producer.send((ProducerRecord<K, V>) new ProducerRecord<String, String>("KafkaHealthCheck", null, "healthCheck Event"), null);
+        }
+        catch (Exception e){
+            logger.error("Failed to Send HealthCheck Event", e);
+            throw new KafkaUnavailableException("Failed to Send HealthCheck Event during KafkaProducer init!", e);
+        }
 
         //Create and initialize local store
         try {
