@@ -1,5 +1,10 @@
 package com.personali.kafka;
 
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -7,6 +12,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.LoggerFactory;
 
 import java.sql.SQLException;
@@ -28,7 +34,10 @@ public class KafkaProducerWrapper<K,V> {
     private Deserializer keyDeserializer;
     private Serializer valueSerializer;
     private Deserializer valueDeserializer;
+    private String SCHEMA = "{\"name\": \"HealthCheck\",\"type\": \"record\",\"namespace\": \"com.personali.healt\",\"fields\": [{\"name\": \"type\",\"type\": \"string\"},{\"name\": \"status\",\"type\": \"string\"}]}";
+    private Schema schema = Schema.parse(SCHEMA);
     LocalRecordPersistentStore<K,V> localRecordPersistentStore;
+    private SchemaRegistryClient registryClient = null;
 
     /**
      * @param bootstrapServers kafka list of bootstrap servers
@@ -40,11 +49,12 @@ public class KafkaProducerWrapper<K,V> {
      * @param valueDeserializer deserialize object to deserialize values
      * @param recreateLocalStore should the local store be truncated on initialization
      * @throws KafkaProducerWrapperException
+     * @throws KafkaUnavailableException
      */
     public KafkaProducerWrapper(String bootstrapServers, String schemaRegistryUrl,
                                 String topic, Serializer keySerializer, Serializer valueSerializer,
                                 Deserializer keyDeserializer, Deserializer valueDeserializer,
-                                Boolean recreateLocalStore) throws KafkaProducerWrapperException, KafkaUnavailableException {
+                                Boolean recreateLocalStore, Boolean checkKafkaAvailability) throws KafkaProducerWrapperException, KafkaUnavailableException {
         this.topic = topic;
 
         //Creating a default best practice, exactly once producer configuration
@@ -57,7 +67,7 @@ public class KafkaProducerWrapper<K,V> {
         props.put("value.serializer", valueSerializer.getClass());
         props.put("enable.idempotence", "true");
         props.put("schema.registry.url", schemaRegistryUrl);
-        props.put("max.block.ms", 10000);
+        props.put("max.block.ms", 30000);
 
         //Configure wrapper serdes for local store usage
         this.keyDeserializer = keyDeserializer;
@@ -70,9 +80,22 @@ public class KafkaProducerWrapper<K,V> {
         this.valueDeserializer.configure(props,false);
 
         //Initialize Apache Kafka Producer Client
+        producer = new KafkaProducer<K, V>(props);
         try {
-            producer = new KafkaProducer<K, V>(props);
-            Future<RecordMetadata> metadata = producer.send((ProducerRecord<K, V>) new ProducerRecord<String, String>("KafkaHealthCheck", null, "healthCheck Event"), null);
+            if (checkKafkaAvailability){
+                if (valueSerializer.getClass().getName().contains("StringSerializer")) {
+                    Future<RecordMetadata> metadata = producer.send((ProducerRecord<K, V>) new ProducerRecord<String, String>("KafkaHealthCheck", null, "healthCheck Event"), null);
+                }
+                else if (valueSerializer.getClass().getName().contains("KafkaAvroSerializer")){
+                    registryClient = new CachedSchemaRegistryClient(schemaRegistryUrl,1000);
+                    registryClient.register("HealthCheck", schema);
+                    GenericRecord record = new GenericData.Record(schema);
+                    record.put("type", "KAFKA");
+                    record.put("status", "OK");
+                    Future<RecordMetadata> metadata = producer.send((ProducerRecord<K, V>) new ProducerRecord<String, GenericRecord>("AvroKafkaHealthCheck", null, record), null);
+                }
+            }
+
         }
         catch (Exception e){
             logger.error("Failed to Send HealthCheck Event", e);
