@@ -58,7 +58,6 @@ public class KafkaProducerWrapper<K,V> {
         this.topic = topic;
 
         //Creating a default best practice, exactly once producer configuration
-        logger.info("roy was here");
         Properties props = new Properties();
         props.put("bootstrap.servers", bootstrapServers);
         props.put("acks", "all");
@@ -86,9 +85,9 @@ public class KafkaProducerWrapper<K,V> {
     }
 
     public KafkaProducerWrapper(Properties props, String schemaRegistryUrl,
+                                String topic,
                                 Serializer keySerializer, Serializer valueSerializer,
                                 Deserializer keyDeserializer, Deserializer valueDeserializer,
-                                String topic,
                                 Boolean recreateLocalStore, Boolean checkKafkaAvailability) throws KafkaProducerWrapperException, KafkaUnavailableException {
         this.topic = topic;
 
