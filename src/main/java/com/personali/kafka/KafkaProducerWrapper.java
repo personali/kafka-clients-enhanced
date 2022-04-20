@@ -82,13 +82,40 @@ public class KafkaProducerWrapper<K,V> {
 
         //Initialize Apache Kafka Producer Client
         producer = new KafkaProducer<K, V>(props);
+        KafkaProducerWrapperBuild(schemaRegistryUrl, valueSerializer, topic, recreateLocalStore, checkKafkaAvailability);
+    }
+
+    public KafkaProducerWrapper(Properties props, String schemaRegistryUrl,
+                                Serializer keySerializer, Serializer valueSerializer,
+                                Deserializer keyDeserializer, Deserializer valueDeserializer,
+                                String topic,
+                                Boolean recreateLocalStore, Boolean checkKafkaAvailability) throws KafkaProducerWrapperException, KafkaUnavailableException {
+        this.topic = topic;
+
+        //Creating exactly once producer configuration with props configs
+
+        //Configure wrapper serdes for local store usage
+        this.keyDeserializer = keyDeserializer;
+        this.keySerializer = keySerializer;
+        this.valueDeserializer = valueDeserializer;
+        this.valueSerializer = valueSerializer;
+        this.keySerializer.configure(props,true);
+        this.keyDeserializer.configure(props,true);
+        this.valueSerializer.configure(props,false);
+        this.valueDeserializer.configure(props,false);
+
+        //Initialize Apache Kafka Producer Client
+        producer = new KafkaProducer<K, V>(props);
+        KafkaProducerWrapperBuild(schemaRegistryUrl, valueSerializer, topic, recreateLocalStore, checkKafkaAvailability);
+    }
+
+    private void KafkaProducerWrapperBuild(String schemaRegistryUrl, Serializer valueSerializer, String topic, Boolean recreateLocalStore, Boolean checkKafkaAvailability) throws KafkaUnavailableException, KafkaProducerWrapperException {
         try {
-            if (checkKafkaAvailability){
+            if (checkKafkaAvailability) {
                 if (valueSerializer.getClass().getName().contains("StringSerializer")) {
                     Future<RecordMetadata> metadata = producer.send((ProducerRecord<K, V>) new ProducerRecord<String, String>("KafkaHealthCheck", null, "healthCheck Event"), null);
-                }
-                else if (valueSerializer.getClass().getName().contains("KafkaAvroSerializer")){
-                    registryClient = new CachedSchemaRegistryClient(schemaRegistryUrl,1000);
+                } else if (valueSerializer.getClass().getName().contains("KafkaAvroSerializer")) {
+                    registryClient = new CachedSchemaRegistryClient(schemaRegistryUrl, 1000);
                     registryClient.register("HealthCheck", schema);
                     GenericRecord record = new GenericData.Record(schema);
                     record.put("type", "KAFKA");
@@ -97,19 +124,17 @@ public class KafkaProducerWrapper<K,V> {
                 }
             }
 
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             logger.error("Failed to Send HealthCheck Event", e);
             throw new KafkaUnavailableException("Failed to Send HealthCheck Event during KafkaProducer init!", e);
         }
 
         //Create and initialize local store
         try {
-            localRecordPersistentStore = new LocalRecordPersistentStore<K, V>(recreateLocalStore,topic);
-        }
-        catch (SQLException e){
+            localRecordPersistentStore = new LocalRecordPersistentStore<K, V>(recreateLocalStore, topic);
+        } catch (SQLException e) {
             logger.error("Could not create local record persistent store", e);
-            throw new KafkaProducerWrapperException("Could not create local record persistent store",e);
+            throw new KafkaProducerWrapperException("Could not create local record persistent store", e);
         }
 
         //Start a scheduled worker to retry messages from local persistent store
